@@ -5,4 +5,11 @@ services:
       MLFLOW_SERVER_CORS_ALLOWED_ORIGINS: http://localhost:${MLFLOW_LOCAL_PORT:-5000},http://127.0.0.1:${MLFLOW_LOCAL_PORT:-5000}
     ports:
       - "127.0.0.1:${MLFLOW_LOCAL_PORT:-5000}:5000"
+    networks:
+      - backend
+      - local_access
 
+networks:
+  local_access:
+    name: mlflow_local_access
+    driver: bridge
