@@ -96,6 +96,33 @@ sed -n '1p' secrets/mlflow_admin_password
 Create named user accounts, assign only required permissions, and rotate the
 initial administrator password after first login.
 
+## No-DNS deployment using an SSH tunnel
+
+If no DNS name is available, do not expose MLflow over public HTTP. Initialize
+with `localhost`, then use the local-only deployment mode:
+
+```bash
+bash scripts/init-config.sh --domain localhost --email admin@example.com
+bash scripts/preflight-local.sh
+bash scripts/deploy-local.sh
+```
+
+This publishes MLflow only on the server's loopback interface. It cannot be
+reached directly from the network. On an administrator workstation, create an
+SSH tunnel and keep that terminal open:
+
+```bash
+ssh -N -L 5000:127.0.0.1:5000 USER@SERVER_IP
+```
+
+Open `http://localhost:5000` locally. The HTTP connection exists only inside
+the encrypted SSH tunnel. Configure MLflow clients on that workstation with
+`MLFLOW_TRACKING_URI=http://localhost:5000` while the tunnel is active.
+
+Use `bash scripts/status-local.sh` for health checks in this mode. Obtain a
+real DNS name and redeploy with `scripts/deploy.sh` before offering MLflow as a
+directly accessible shared Internet service.
+
 Configure a client with an individual MLflow account:
 
 ```bash
