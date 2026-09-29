@@ -1,0 +1,9 @@
+.git
+.env
+secrets
+runtime
+logs
+backups
+dags/__pycache__
+README.md
+

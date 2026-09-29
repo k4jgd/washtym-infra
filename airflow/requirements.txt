@@ -1,0 +1,6 @@
+# Add only pinned, reviewed provider/application dependencies here, for example:
+# apache-airflow-providers-http==5.5.0
+#
+# Rebuild and test after every change. Do not install dependencies at container
+# startup with _PIP_ADDITIONAL_REQUIREMENTS in production.
+

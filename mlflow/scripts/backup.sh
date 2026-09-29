@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/common.sh"
+
+require_command docker
+require_command tar
+require_initialized
+
+timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+destination="$PROJECT_DIR/backups/$timestamp"
+mkdir -p "$destination"
+chmod 0700 "$destination"
+
+db_user="$(env_value POSTGRES_USER)"
+db_name="$(env_value POSTGRES_DB)"
+
+info "Backing up PostgreSQL"
+"${COMPOSE[@]}" exec -T postgres \
+  pg_dump -U "$db_user" -d "$db_name" --format=custom \
+  > "$destination/postgres.dump"
+
+info "Backing up MLflow artifacts"
+docker run --rm \
+  --mount type=volume,src=mlflow_artifacts,dst=/source,readonly \
+  --mount type=bind,src="$destination",dst=/backup \
+  alpine:3.22 tar -C /source -czf /backup/artifacts.tar.gz .
+
+info "Backing up deployment configuration and secrets"
+tar -C "$PROJECT_DIR" -czf "$destination/configuration.tar.gz" \
+  .env compose.yaml Dockerfile caddy docker scripts secrets runtime
+
+sha256sum "$destination"/* > "$destination/SHA256SUMS"
+chmod 0600 "$destination"/*
+
+retention="$(env_value BACKUP_RETENTION_DAYS)"
+if [[ "$retention" =~ ^[0-9]+$ ]] && ((retention > 0)); then
+  find "$PROJECT_DIR/backups" -mindepth 1 -maxdepth 1 -type d \
+    -mtime "+$retention" -print -exec rm -rf -- {} +
+fi
+
+echo "Backup created: $destination"
+echo "This backup contains secrets. Copy it to encrypted off-server storage."

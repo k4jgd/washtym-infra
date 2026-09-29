@@ -1,0 +1,9 @@
+.env
+secrets/
+runtime/
+logs/*
+!logs/.gitkeep
+backups/
+*.log
+__pycache__/
+*.py[cod]

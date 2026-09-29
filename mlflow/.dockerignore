@@ -1,0 +1,7 @@
+.git
+.env
+secrets
+runtime
+backups
+README.md
+

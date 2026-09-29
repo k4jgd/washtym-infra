@@ -1,0 +1,164 @@
+name: mlflow
+
+services:
+  postgres:
+    image: postgres:${POSTGRES_VERSION}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      TZ: ${TZ}
+      PGTZ: ${TZ}
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    command:
+      - postgres
+      - -c
+      - max_connections=50
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=768MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - work_mem=4MB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: ${POSTGRES_MEMORY_LIMIT}
+    cpus: ${POSTGRES_CPU_LIMIT}
+    logging: &default-logging
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  mlflow:
+    build:
+      context: .
+      args:
+        MLFLOW_VERSION: ${MLFLOW_VERSION}
+        MLFLOW_UID: ${MLFLOW_UID}
+        MLFLOW_GID: ${MLFLOW_GID}
+    image: local/mlflow-server:${MLFLOW_VERSION}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      MLFLOW_AUTH_ADMIN_USERNAME: admin
+      MLFLOW_ARTIFACTS_DESTINATION: /mlartifacts
+      MLFLOW_HOST: 0.0.0.0
+      MLFLOW_PORT: "5000"
+      MLFLOW_WORKERS: ${MLFLOW_WORKERS}
+      MLFLOW_SERVER_ALLOWED_HOSTS: ${DOMAIN}
+      MLFLOW_SERVER_CORS_ALLOWED_ORIGINS: https://${DOMAIN}
+      MLFLOW_SERVER_X_FRAME_OPTIONS: DENY
+      MLFLOW_SERVER_ENABLE_JOB_EXECUTION: "false"
+      MLFLOW_ALLOW_PICKLE_DESERIALIZATION: "false"
+      TZ: ${TZ}
+    secrets:
+      - postgres_password
+      - mlflow_flask_secret
+      - mlflow_admin_password
+    volumes:
+      - mlflow_artifacts:/mlartifacts
+      - ./runtime:/run/mlflow-runtime:ro
+    networks:
+      - backend
+    expose:
+      - "5000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=5)"
+      interval: 15s
+      timeout: 7s
+      retries: 20
+      start_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp:uid=${MLFLOW_UID},gid=${MLFLOW_GID},mode=1770,size=256m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: ${MLFLOW_MEMORY_LIMIT}
+    cpus: ${MLFLOW_CPU_LIMIT}
+    logging: *default-logging
+
+  caddy:
+    image: caddy:${CADDY_VERSION}
+    restart: unless-stopped
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+      MAX_REQUEST_BODY_SIZE: ${MAX_REQUEST_BODY_SIZE}
+    volumes:
+      - ./caddy:/etc/caddy:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - frontend
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: ${CADDY_MEMORY_LIMIT}
+    cpus: ${CADDY_CPU_LIMIT}
+    logging: *default-logging
+
+networks:
+  frontend:
+    name: localinfra_edge
+    external: true
+  backend:
+    internal: true
+
+volumes:
+  postgres_data:
+    name: mlflow_postgres_data
+  mlflow_artifacts:
+    name: mlflow_artifacts
+  caddy_data:
+    name: mlflow_caddy_data
+  caddy_config:
+    name: mlflow_caddy_config
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password
+  mlflow_flask_secret:
+    file: ./secrets/mlflow_flask_secret
+  mlflow_admin_password:
+    file: ./secrets/mlflow_admin_password

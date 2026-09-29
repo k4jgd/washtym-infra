@@ -1,0 +1,239 @@
+name: airflow
+
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+x-airflow-environment: &airflow-environment
+  AIRFLOW_HOME: /opt/airflow
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+  AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+  AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  AIRFLOW__CORE__PARALLELISM: ${AIRFLOW_PARALLELISM}
+  AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: ${AIRFLOW_PARALLELISM}
+  AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: "1"
+  AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api-server:8080/execution/
+  AIRFLOW__API__BASE_URL: https://${DOMAIN}
+  AIRFLOW__API__WORKERS: ${AIRFLOW_API_WORKERS}
+  AIRFLOW__API__REQUIRE_CONFIRMATION_DAG_CHANGE: "true"
+  AIRFLOW__API_AUTH__JWT_AUDIENCE: localinfra-airflow
+  AIRFLOW__API_AUTH__JWT_ISSUER: localinfra-airflow
+  AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+  AIRFLOW__DAG_PROCESSOR__PARSING_PROCESSES: "1"
+  AIRFLOW__FAB__ENABLE_PROXY_FIX: "true"
+  AIRFLOW__FAB__CONFIG_FILE: /opt/airflow/config/webserver_config.py
+  AIRFLOW__FAB__PROXY_FIX_X_FOR: "1"
+  AIRFLOW__FAB__PROXY_FIX_X_PROTO: "1"
+  AIRFLOW__FAB__AUTH_RATE_LIMITED: "true"
+  AIRFLOW__FAB__SESSION_BACKEND: database
+  AIRFLOW__FAB__AUTH_ROLE_PUBLIC: ""
+  AIRFLOW__LOGGING__LOGGING_LEVEL: INFO
+  AIRFLOW__METRICS__STATSD_ON: "false"
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: ${POSTGRES_DB}
+  POSTGRES_USER: ${POSTGRES_USER}
+  TZ: ${TZ}
+  _PIP_ADDITIONAL_REQUIREMENTS: ""
+
+x-airflow-common: &airflow-common
+  image: local/airflow-server:${AIRFLOW_VERSION}
+  build:
+    context: .
+    args:
+      AIRFLOW_VERSION: ${AIRFLOW_VERSION}
+  user: "${AIRFLOW_UID}:${AIRFLOW_GID}"
+  environment: *airflow-environment
+  secrets:
+    - postgres_password
+    - airflow_fernet_key
+    - airflow_jwt_secret
+    - airflow_api_secret
+  volumes:
+    - ./dags:/opt/airflow/dags:ro
+    - ./logs:/opt/airflow/logs
+    - ./config:/opt/airflow/config:ro
+    - ./plugins:/opt/airflow/plugins:ro
+  depends_on:
+    postgres:
+      condition: service_healthy
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp:mode=1777,size=256m
+    - /home/airflow/.cache:mode=1777,size=128m
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  pids_limit: 256
+  logging: *default-logging
+
+services:
+  postgres:
+    image: postgres:${POSTGRES_VERSION}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      TZ: ${TZ}
+      PGTZ: ${TZ}
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    command:
+      - postgres
+      - -c
+      - max_connections=80
+      - -c
+      - shared_buffers=192MB
+      - -c
+      - effective_cache_size=512MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - work_mem=4MB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: ${POSTGRES_MEMORY_LIMIT}
+    cpus: ${POSTGRES_CPU_LIMIT}
+    logging: *default-logging
+
+  airflow-init:
+    <<: *airflow-common
+    restart: "no"
+    environment:
+      <<: *airflow-environment
+      AIRFLOW_BOOTSTRAP_ADMIN: "true"
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_FIRSTNAME: Airflow
+      _AIRFLOW_WWW_USER_LASTNAME: Administrator
+      _AIRFLOW_WWW_USER_EMAIL: admin@localhost
+    secrets:
+      - postgres_password
+      - airflow_fernet_key
+      - airflow_jwt_secret
+      - airflow_api_secret
+      - airflow_admin_password
+    command: ["airflow", "version"]
+    networks:
+      - backend
+    mem_limit: 768m
+    cpus: 1.0
+
+  airflow-api-server:
+    <<: *airflow-common
+    command: ["api-server"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      backend:
+      frontend:
+        aliases:
+          - airflow-api-server
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:8080/api/v2/monitor/health"]
+      interval: 20s
+      timeout: 10s
+      retries: 12
+      start_period: 40s
+    mem_limit: ${AIRFLOW_API_MEMORY_LIMIT}
+    cpus: ${AIRFLOW_API_CPU_LIMIT}
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: ["scheduler"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-api-server:
+        condition: service_healthy
+    networks:
+      - backend
+      - task_egress
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 8
+      start_period: 40s
+    mem_limit: ${AIRFLOW_SCHEDULER_MEMORY_LIMIT}
+    cpus: ${AIRFLOW_SCHEDULER_CPU_LIMIT}
+    pids_limit: 512
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: ["dag-processor"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type DagProcessorJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 8
+      start_period: 40s
+    mem_limit: ${AIRFLOW_DAG_PROCESSOR_MEMORY_LIMIT}
+    cpus: ${AIRFLOW_DAG_PROCESSOR_CPU_LIMIT}
+
+  airflow-triggerer:
+    <<: *airflow-common
+    command: ["triggerer"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+      - task_egress
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type TriggererJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 8
+      start_period: 40s
+    mem_limit: ${AIRFLOW_TRIGGERER_MEMORY_LIMIT}
+    cpus: ${AIRFLOW_TRIGGERER_CPU_LIMIT}
+
+networks:
+  frontend:
+    name: localinfra_edge
+    external: true
+  backend:
+    internal: true
+  task_egress:
+
+volumes:
+  postgres_data:
+    name: airflow_postgres_data
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password
+  airflow_fernet_key:
+    file: ./secrets/airflow_fernet_key
+  airflow_jwt_secret:
+    file: ./secrets/airflow_jwt_secret
+  airflow_api_secret:
+    file: ./secrets/airflow_api_secret
+  airflow_admin_password:
+    file: ./secrets/airflow_admin_password
