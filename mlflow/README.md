@@ -102,10 +102,14 @@ If no DNS name is available, do not expose MLflow over public HTTP. Initialize
 with `localhost`, then use the local-only deployment mode:
 
 ```bash
-bash scripts/init-config.sh --domain localhost --email admin@example.com
-bash scripts/preflight-local.sh
-bash scripts/deploy-local.sh
+bash main.sh --email admin@example.com
 ```
+
+On later runs, `bash main.sh` reuses the existing configuration. The script
+bootstraps Docker when necessary, initializes secrets, deploys the services,
+checks the actual loopback port mapping, checks health, and prints the tunnel
+command. If Docker group membership was added during the run, reconnect once
+and run the same command again.
 
 This publishes MLflow only on the server's loopback interface. It cannot be
 reached directly from the network. On an administrator workstation, create an

@@ -42,7 +42,10 @@ info "Applying MLflow tracking database migrations"
   bash -lc 'mlflow db upgrade "$MLFLOW_BACKEND_STORE_URI"'
 
 info "Starting MLflow on the server loopback interface"
-"${COMPOSE[@]}" up -d --remove-orphans postgres mlflow
+"${COMPOSE[@]}" up -d --remove-orphans postgres
+# Always recreate this container so Docker applies the loopback-only published
+# port even when an earlier attempt created the service from compose.yaml alone.
+"${COMPOSE[@]}" up -d --force-recreate --no-deps mlflow
 wait_for_mlflow_container
 
 if [[ ! -f "$PROJECT_DIR/runtime/auth-bootstrap-complete" ]]; then
@@ -64,4 +67,3 @@ echo "  ssh -N -L ${local_port}:127.0.0.1:${local_port} USER@SERVER_IP"
 echo "Then open http://localhost:${local_port} on your computer."
 echo "Admin username: admin"
 echo "Initial password: $PROJECT_DIR/secrets/mlflow_admin_password"
-
