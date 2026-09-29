@@ -47,8 +47,7 @@ docker info >/dev/null 2>&1 || {
 
 echo "This will permanently delete:"
 echo "  - Docker containers belonging to Compose project 'mlflow'"
-echo "  - volumes mlflow_postgres_data, mlflow_artifacts, mlflow_caddy_data, mlflow_caddy_config"
-echo "  - volume mlflow_minio_data"
+echo "  - volumes mlflow_postgres_data and mlflow_minio_data"
 echo "  - MLflow-only Docker networks and locally built MLflow/MinIO images"
 echo "  - $PROJECT_DIR/.env"
 echo "  - $PROJECT_DIR/secrets"
@@ -76,10 +75,7 @@ fi
 
 for volume in \
   mlflow_postgres_data \
-  mlflow_artifacts \
-  mlflow_minio_data \
-  mlflow_caddy_data \
-  mlflow_caddy_config; do
+  mlflow_minio_data; do
   docker volume inspect "$volume" >/dev/null 2>&1 \
     && docker volume rm "$volume" >/dev/null \
     || true
@@ -87,8 +83,6 @@ done
 
 for network in \
   mlflow_backend \
-  mlflow_local_access \
-  mlflow_vpn_access \
   mlflow_lan_access; do
   docker network inspect "$network" >/dev/null 2>&1 \
     && docker network rm "$network" >/dev/null \
@@ -112,10 +106,7 @@ if [[ -n "$(docker ps -aq --filter label=com.docker.compose.project=mlflow)" ]];
 fi
 for volume in \
   mlflow_postgres_data \
-  mlflow_artifacts \
-  mlflow_minio_data \
-  mlflow_caddy_data \
-  mlflow_caddy_config; do
+  mlflow_minio_data; do
   if docker volume inspect "$volume" >/dev/null 2>&1; then
     echo "ERROR: volume remains: $volume" >&2
     cleanup_incomplete=true
@@ -123,8 +114,6 @@ for volume in \
 done
 for network in \
   mlflow_backend \
-  mlflow_local_access \
-  mlflow_vpn_access \
   mlflow_lan_access; do
   if docker network inspect "$network" >/dev/null 2>&1; then
     echo "ERROR: network remains: $network" >&2
@@ -146,4 +135,4 @@ echo "MLflow reset completed."
 if [[ "$PURGE_BACKUPS" == false ]]; then
   echo "Backups were preserved at: $PROJECT_DIR/backups"
 fi
-echo "Run setup-lan.sh to create a fresh LAN-only deployment."
+echo "Run main.sh to create a fresh LAN deployment."

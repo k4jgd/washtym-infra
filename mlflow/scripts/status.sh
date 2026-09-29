@@ -6,17 +6,15 @@ require_command docker
 require_command curl
 require_initialized
 
-domain="$(env_value DOMAIN)"
+lan_ip="$(env_value MLFLOW_LAN_IP)"
+lan_port="$(env_value MLFLOW_LAN_PORT)"
+
 "${COMPOSE[@]}" ps
 
-echo
-if curl --fail --silent --show-error --max-time 15 "https://${domain}/health"; then
-  echo
-  echo "Public health check passed."
-else
-  echo "Public health check failed." >&2
-  exit 1
-fi
+curl --fail --silent --show-error --max-time 15 \
+  "http://${lan_ip}:${lan_port}/health" >/dev/null \
+  || die "MLflow health check failed at http://${lan_ip}:${lan_port}."
 
-version="$("${COMPOSE[@]}" exec -T mlflow mlflow --version)"
-echo "$version"
+echo "MLflow health check passed: http://${lan_ip}:${lan_port}"
+"${COMPOSE[@]}" exec -T mlflow mlflow --version
+echo "Artifact destination: $("${COMPOSE[@]}" exec -T mlflow printenv MLFLOW_ARTIFACTS_DESTINATION)"

@@ -2,6 +2,4 @@
 secrets/
 runtime/
 backups/
-caddy/sites/*.caddy
-!caddy/sites/.gitkeep
 *.log

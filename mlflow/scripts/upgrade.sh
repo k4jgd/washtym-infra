@@ -18,7 +18,7 @@ info "Creating a pre-upgrade backup"
 bash "$SCRIPT_DIR/backup.sh"
 
 info "Stopping MLflow writes while preserving PostgreSQL"
-"${COMPOSE[@]}" stop caddy mlflow
+"${COMPOSE[@]}" stop mlflow
 
 sed -i "s/^MLFLOW_VERSION=.*/MLFLOW_VERSION=${NEW_VERSION}/" "$PROJECT_DIR/.env"
 

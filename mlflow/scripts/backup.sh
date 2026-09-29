@@ -13,15 +13,11 @@ chmod 0700 "$destination"
 
 db_user="$(env_value POSTGRES_USER)"
 db_name="$(env_value POSTGRES_DB)"
-artifact_store="$(configured_value ARTIFACT_STORE)"
-artifact_store="${artifact_store:-local}"
 
 info "Stopping MLflow writes for a consistent database and artifact backup"
 "${COMPOSE[@]}" stop mlflow
 restart_services() {
-  if [[ "$artifact_store" == "minio" ]]; then
-    "${COMPOSE[@]}" start minio >/dev/null 2>&1 || true
-  fi
+  "${COMPOSE[@]}" start minio >/dev/null 2>&1 || true
   "${COMPOSE[@]}" start mlflow >/dev/null 2>&1 || true
 }
 trap restart_services EXIT
@@ -31,32 +27,24 @@ info "Backing up PostgreSQL"
   pg_dump -U "$db_user" -d "$db_name" --format=custom \
   > "$destination/postgres.dump"
 
-if [[ "$artifact_store" == "minio" ]]; then
-  info "Stopping MinIO for a consistent data-volume snapshot"
-  "${COMPOSE[@]}" stop minio
+info "Stopping MinIO for a consistent data-volume snapshot"
+"${COMPOSE[@]}" stop minio
 
-  info "Backing up the MinIO data volume"
-  docker run --rm \
-    --mount type=volume,src=mlflow_minio_data,dst=/source,readonly \
-    --mount type=bind,src="$destination",dst=/backup \
-    alpine:3.22 tar -C /source -czf /backup/artifacts.tar.gz .
+info "Backing up the MinIO data volume"
+docker run --rm \
+  --mount type=volume,src=mlflow_minio_data,dst=/source,readonly \
+  --mount type=bind,src="$destination",dst=/backup \
+  alpine:3.22 tar -C /source -czf /backup/artifacts.tar.gz .
 
-  prepare_artifact_store
-else
-  info "Backing up the local MLflow artifact volume"
-  docker run --rm \
-    --mount type=volume,src=mlflow_artifacts,dst=/source,readonly \
-    --mount type=bind,src="$destination",dst=/backup \
-    alpine:3.22 tar -C /source -czf /backup/artifacts.tar.gz .
-fi
+prepare_artifact_store
 
 "${COMPOSE[@]}" start mlflow
 trap - EXIT
 
 info "Backing up deployment configuration and secrets"
 tar -C "$PROJECT_DIR" -czf "$destination/configuration.tar.gz" \
-  .env compose.yaml compose.*.yaml Dockerfile caddy docker scripts secrets runtime \
-  main.sh setup-*.sh reset-mlflow.sh
+  .env compose.yaml compose.*.yaml Dockerfile docker scripts secrets runtime \
+  main.sh reset-mlflow.sh
 
 sha256sum "$destination"/* > "$destination/SHA256SUMS"
 chmod 0600 "$destination"/*

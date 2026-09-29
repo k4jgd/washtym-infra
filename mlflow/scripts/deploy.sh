@@ -9,22 +9,13 @@ require_initialized
 info "Running server preflight checks"
 bash "$SCRIPT_DIR/preflight.sh"
 
-domain="$(env_value DOMAIN)"
-email="$(env_value ACME_EMAIL)"
-[[ "$domain" != "mlflow.example.com" ]] || die "Replace the example DOMAIN by running scripts/init-config.sh."
-[[ "$email" != "admin@example.com" ]] || die "Replace the example ACME_EMAIL by running scripts/init-config.sh."
+lan_ip="$(env_value MLFLOW_LAN_IP)"
+lan_port="$(env_value MLFLOW_LAN_PORT)"
 
-info "Validating Compose configuration"
-"${COMPOSE[@]}" config --quiet
+info "Pulling PostgreSQL"
+"${COMPOSE[@]}" pull postgres
 
-info "Ensuring the shared HTTPS edge network exists"
-docker network inspect localinfra_edge >/dev/null 2>&1 \
-  || docker network create localinfra_edge >/dev/null
-
-info "Pulling base service images"
-"${COMPOSE[@]}" pull postgres caddy
-
-info "Building the pinned MLflow image"
+info "Building MLflow"
 "${COMPOSE[@]}" build --pull mlflow
 
 info "Starting PostgreSQL"
@@ -41,14 +32,14 @@ for ((i = 1; i <= 30; i++)); do
   sleep 2
 done
 
-info "Applying MLflow tracking database migrations"
-# The URI is intentionally expanded by the shell inside the container.
+info "Applying MLflow database migrations"
 # shellcheck disable=SC2016
 "${COMPOSE[@]}" run --rm --no-deps mlflow \
   bash -lc 'mlflow db upgrade "$MLFLOW_BACKEND_STORE_URI"'
 
-info "Starting MLflow and the HTTPS proxy"
-"${COMPOSE[@]}" up -d --remove-orphans
+info "Starting MLflow"
+"${COMPOSE[@]}" up -d --remove-orphans postgres
+"${COMPOSE[@]}" up -d --force-recreate --no-deps mlflow
 wait_for_mlflow_container
 
 if [[ ! -f "$PROJECT_DIR/runtime/auth-bootstrap-complete" ]]; then
@@ -59,15 +50,8 @@ if [[ ! -f "$PROJECT_DIR/runtime/auth-bootstrap-complete" ]]; then
   wait_for_mlflow_container
 fi
 
-info "Checking the public endpoint"
-if curl --fail --silent --show-error --max-time 15 "https://${domain}/health" >/dev/null; then
-  echo "MLflow is healthy at https://${domain}"
-else
-  echo "MLflow is healthy inside Docker, but the public HTTPS check failed." >&2
-  echo "Confirm DNS, ports 80/443, and Caddy logs:" >&2
-  echo "  docker compose logs caddy" >&2
-  exit 1
-fi
+curl --fail --silent --show-error --max-time 15 \
+  "http://${lan_ip}:${lan_port}/health" >/dev/null \
+  || die "MLflow is not reachable on ${lan_ip}:${lan_port}."
 
-echo "Admin username: admin"
-echo "Initial password: $PROJECT_DIR/secrets/mlflow_admin_password"
+echo "MLflow is healthy at http://${lan_ip}:${lan_port}"

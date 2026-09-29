@@ -37,13 +37,8 @@ read -r -p "Type RESTORE to continue: " answer
 [[ "$answer" == "RESTORE" ]] || die "Restore cancelled."
 
 info "Stopping writers"
-if [[ "$(configured_value ARTIFACT_STORE)" == "minio" ]]; then
-  "${COMPOSE[@]}" stop caddy mlflow minio
-  artifact_volume="mlflow_minio_data"
-else
-  "${COMPOSE[@]}" stop caddy mlflow
-  artifact_volume="mlflow_artifacts"
-fi
+"${COMPOSE[@]}" stop mlflow minio
+artifact_volume="mlflow_minio_data"
 "${COMPOSE[@]}" up -d postgres
 
 db_user="$(env_value POSTGRES_USER)"
@@ -66,4 +61,4 @@ docker run --rm \
 info "Starting services"
 start_configured_stack
 wait_for_mlflow_container
-echo "Restore completed. Run the status script for the configured deployment mode."
+echo "Restore completed. Run scripts/status.sh."

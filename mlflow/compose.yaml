@@ -62,12 +62,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       MLFLOW_AUTH_ADMIN_USERNAME: admin
-      MLFLOW_ARTIFACTS_DESTINATION: /mlartifacts
       MLFLOW_HOST: 0.0.0.0
       MLFLOW_PORT: "5000"
       MLFLOW_WORKERS: ${MLFLOW_WORKERS}
-      MLFLOW_SERVER_ALLOWED_HOSTS: ${DOMAIN}
-      MLFLOW_SERVER_CORS_ALLOWED_ORIGINS: https://${DOMAIN}
       MLFLOW_SERVER_X_FRAME_OPTIONS: DENY
       MLFLOW_SERVER_ENABLE_JOB_EXECUTION: "false"
       MLFLOW_ALLOW_PICKLE_DESERIALIZATION: "false"
@@ -77,7 +74,6 @@ services:
       - mlflow_flask_secret
       - mlflow_admin_password
     volumes:
-      - mlflow_artifacts:/mlartifacts
       - ./runtime:/run/mlflow-runtime:ro
     networks:
       - backend
@@ -104,57 +100,13 @@ services:
     cpus: ${MLFLOW_CPU_LIMIT}
     logging: *default-logging
 
-  caddy:
-    image: caddy:${CADDY_VERSION}
-    restart: unless-stopped
-    depends_on:
-      mlflow:
-        condition: service_healthy
-    environment:
-      DOMAIN: ${DOMAIN}
-      ACME_EMAIL: ${ACME_EMAIL}
-      MAX_REQUEST_BODY_SIZE: ${MAX_REQUEST_BODY_SIZE}
-    volumes:
-      - ./caddy:/etc/caddy:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    networks:
-      - frontend
-      - backend
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    read_only: true
-    tmpfs:
-      - /tmp:size=64m
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_BIND_SERVICE
-    security_opt:
-      - no-new-privileges:true
-    mem_limit: ${CADDY_MEMORY_LIMIT}
-    cpus: ${CADDY_CPU_LIMIT}
-    logging: *default-logging
-
 networks:
-  frontend:
-    name: localinfra_edge
-    external: true
   backend:
     internal: true
 
 volumes:
   postgres_data:
     name: mlflow_postgres_data
-  mlflow_artifacts:
-    name: mlflow_artifacts
-  caddy_data:
-    name: mlflow_caddy_data
-  caddy_config:
-    name: mlflow_caddy_config
-
 secrets:
   postgres_password:
     file: ./secrets/postgres_password
