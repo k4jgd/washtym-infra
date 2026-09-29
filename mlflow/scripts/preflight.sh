@@ -11,6 +11,11 @@ require_initialized
 [[ "$(uname -s)" == "Linux" ]] || die "Deployment requires a Linux server."
 docker info >/dev/null 2>&1 || die "Docker Engine is not running or this user cannot access it."
 docker compose version >/dev/null 2>&1 || die "The Docker Compose plugin is unavailable."
+require_shared_postgres
+[[ "$(env_value POSTGRES_DB)" == "$(postgres_env_value MLFLOW_DB)" ]] \
+  || die "MLflow database name does not match the shared PostgreSQL configuration."
+[[ "$(env_value POSTGRES_USER)" == "$(postgres_env_value MLFLOW_DB_USER)" ]] \
+  || die "MLflow database user does not match the shared PostgreSQL configuration."
 
 lan_ip="$(env_value MLFLOW_LAN_IP)"
 lan_port="$(env_value MLFLOW_LAN_PORT)"

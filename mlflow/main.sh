@@ -85,7 +85,7 @@ fi
 if [[ "$docker_missing" == true || "$CONFIGURE_FIREWALL" == true ]]; then
   bootstrap_args=()
   if [[ "$CONFIGURE_FIREWALL" == true ]]; then
-    bootstrap_args+=(--configure-firewall --lan-cidr "$LAN_CIDR" --mlflow-port "$LAN_PORT" --ssh-port "$SSH_PORT")
+    bootstrap_args+=(--configure-firewall --lan-cidr "$LAN_CIDR" --application-port "$LAN_PORT" --ssh-port "$SSH_PORT")
   fi
   sudo bash "$PROJECT_DIR/scripts/bootstrap-ubuntu.sh" "${bootstrap_args[@]}"
 fi
@@ -94,6 +94,9 @@ if ! docker info >/dev/null 2>&1; then
   echo "Docker is unavailable to $(id -un). Log out and reconnect if docker-group membership was just added." >&2
   exit 1
 fi
+
+echo "==> Starting the shared PostgreSQL data tier"
+bash "$PROJECT_DIR/../postgres/main.sh"
 
 bash "$PROJECT_DIR/scripts/init-config.sh"
 
@@ -109,6 +112,8 @@ set_env_value() {
 set_env_value MLFLOW_LAN_IP "$LAN_IP"
 set_env_value MLFLOW_LAN_PORT "$LAN_PORT"
 set_env_value MINIO_VERSION "$(sed -n 's/^MINIO_VERSION=//p' "$PROJECT_DIR/.env.example" | tail -n 1)"
+set_env_value POSTGRES_DB "$(sed -n 's/^MLFLOW_DB=//p' "$PROJECT_DIR/../postgres/.env" | tail -n 1)"
+set_env_value POSTGRES_USER "$(sed -n 's/^MLFLOW_DB_USER=//p' "$PROJECT_DIR/../postgres/.env" | tail -n 1)"
 
 bash "$PROJECT_DIR/scripts/deploy.sh"
 

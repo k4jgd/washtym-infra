@@ -16,14 +16,14 @@ x-airflow-environment: &airflow-environment
   AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: ${AIRFLOW_PARALLELISM}
   AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: "1"
   AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api-server:8080/execution/
-  AIRFLOW__API__BASE_URL: https://${DOMAIN}
+  AIRFLOW__API__BASE_URL: http://${AIRFLOW_LAN_IP}:${AIRFLOW_LAN_PORT}
   AIRFLOW__API__WORKERS: ${AIRFLOW_API_WORKERS}
   AIRFLOW__API__REQUIRE_CONFIRMATION_DAG_CHANGE: "true"
   AIRFLOW__API_AUTH__JWT_AUDIENCE: localinfra-airflow
   AIRFLOW__API_AUTH__JWT_ISSUER: localinfra-airflow
   AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
   AIRFLOW__DAG_PROCESSOR__PARSING_PROCESSES: "1"
-  AIRFLOW__FAB__ENABLE_PROXY_FIX: "true"
+  AIRFLOW__FAB__ENABLE_PROXY_FIX: "false"
   AIRFLOW__FAB__CONFIG_FILE: /opt/airflow/config/webserver_config.py
   AIRFLOW__FAB__PROXY_FIX_X_FOR: "1"
   AIRFLOW__FAB__PROXY_FIX_X_PROTO: "1"
@@ -32,7 +32,7 @@ x-airflow-environment: &airflow-environment
   AIRFLOW__FAB__AUTH_ROLE_PUBLIC: ""
   AIRFLOW__LOGGING__LOGGING_LEVEL: INFO
   AIRFLOW__METRICS__STATSD_ON: "false"
-  POSTGRES_HOST: postgres
+  POSTGRES_HOST: shared-postgres
   POSTGRES_PORT: "5432"
   POSTGRES_DB: ${POSTGRES_DB}
   POSTGRES_USER: ${POSTGRES_USER}
@@ -57,9 +57,6 @@ x-airflow-common: &airflow-common
     - ./logs:/opt/airflow/logs
     - ./config:/opt/airflow/config:ro
     - ./plugins:/opt/airflow/plugins:ro
-  depends_on:
-    postgres:
-      condition: service_healthy
   restart: unless-stopped
   read_only: true
   tmpfs:
@@ -73,45 +70,6 @@ x-airflow-common: &airflow-common
   logging: *default-logging
 
 services:
-  postgres:
-    image: postgres:${POSTGRES_VERSION}
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      TZ: ${TZ}
-      PGTZ: ${TZ}
-    secrets:
-      - postgres_password
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - backend
-    command:
-      - postgres
-      - -c
-      - max_connections=80
-      - -c
-      - shared_buffers=192MB
-      - -c
-      - effective_cache_size=512MB
-      - -c
-      - maintenance_work_mem=64MB
-      - -c
-      - work_mem=4MB
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 20s
-    security_opt:
-      - no-new-privileges:true
-    mem_limit: ${POSTGRES_MEMORY_LIMIT}
-    cpus: ${POSTGRES_CPU_LIMIT}
-    logging: *default-logging
-
   airflow-init:
     <<: *airflow-common
     restart: "no"
@@ -133,22 +91,21 @@ services:
     command: ["airflow", "version"]
     networks:
       - backend
+      - data
     mem_limit: 768m
     cpus: 1.0
 
   airflow-api-server:
     <<: *airflow-common
     command: ["api-server"]
-    depends_on:
-      postgres:
-        condition: service_healthy
     networks:
       backend:
-      frontend:
-        aliases:
-          - airflow-api-server
+      data:
+      lan_access:
     expose:
       - "8080"
+    ports:
+      - "${AIRFLOW_LAN_IP}:${AIRFLOW_LAN_PORT}:8080"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://127.0.0.1:8080/api/v2/monitor/health"]
       interval: 20s
@@ -162,12 +119,11 @@ services:
     <<: *airflow-common
     command: ["scheduler"]
     depends_on:
-      postgres:
-        condition: service_healthy
       airflow-api-server:
         condition: service_healthy
     networks:
       - backend
+      - data
       - task_egress
     healthcheck:
       test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname \"$${HOSTNAME}\""]
@@ -182,11 +138,9 @@ services:
   airflow-dag-processor:
     <<: *airflow-common
     command: ["dag-processor"]
-    depends_on:
-      postgres:
-        condition: service_healthy
     networks:
       - backend
+      - data
     healthcheck:
       test: ["CMD-SHELL", "airflow jobs check --job-type DagProcessorJob --hostname \"$${HOSTNAME}\""]
       interval: 30s
@@ -199,11 +153,9 @@ services:
   airflow-triggerer:
     <<: *airflow-common
     command: ["triggerer"]
-    depends_on:
-      postgres:
-        condition: service_healthy
     networks:
       - backend
+      - data
       - task_egress
     healthcheck:
       test: ["CMD-SHELL", "airflow jobs check --job-type TriggererJob --hostname \"$${HOSTNAME}\""]
@@ -215,20 +167,19 @@ services:
     cpus: ${AIRFLOW_TRIGGERER_CPU_LIMIT}
 
 networks:
-  frontend:
-    name: localinfra_edge
+  data:
+    name: localinfra_data
     external: true
   backend:
     internal: true
   task_egress:
-
-volumes:
-  postgres_data:
-    name: airflow_postgres_data
+  lan_access:
+    name: airflow_lan_access
+    driver: bridge
 
 secrets:
   postgres_password:
-    file: ./secrets/postgres_password
+    file: ../postgres/secrets/airflow_db_password
   airflow_fernet_key:
     file: ./secrets/airflow_fernet_key
   airflow_jwt_secret:

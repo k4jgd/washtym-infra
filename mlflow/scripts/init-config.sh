@@ -29,7 +29,6 @@ generate_secret() {
   chmod 0644 "$path"
 }
 
-generate_secret postgres_password 32
 generate_secret mlflow_flask_secret 48
 generate_secret mlflow_admin_password 24
 generate_secret minio_access_key 16

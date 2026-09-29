@@ -15,7 +15,7 @@ db_user="$(env_value POSTGRES_USER)"
 db_name="$(env_value POSTGRES_DB)"
 
 info "Backing up the Airflow metadata database"
-"${COMPOSE[@]}" exec -T postgres \
+"${POSTGRES_COMPOSE[@]}" exec -T postgres \
   pg_dump -U "$db_user" -d "$db_name" --format=custom \
   > "$destination/postgres.dump"
 
@@ -25,10 +25,8 @@ tar -C "$PROJECT_DIR" -czf "$destination/logs.tar.gz" logs
 
 info "Backing up configuration and encryption secrets"
 tar -C "$PROJECT_DIR" -czf "$destination/configuration.tar.gz" \
-  .env compose.yaml Dockerfile requirements.txt config plugins docker scripts secrets runtime
-if [[ -f "$MLFLOW_DIR/caddy/sites/airflow.caddy" ]]; then
-  cp "$MLFLOW_DIR/caddy/sites/airflow.caddy" "$destination/airflow.caddy"
-fi
+  .env compose.yaml Dockerfile requirements.txt config plugins docker scripts secrets runtime \
+  main.sh reset-airflow.sh
 
 sha256sum "$destination"/* > "$destination/SHA256SUMS"
 chmod 0600 "$destination"/*

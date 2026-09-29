@@ -12,25 +12,13 @@ bash "$SCRIPT_DIR/preflight.sh"
 lan_ip="$(env_value MLFLOW_LAN_IP)"
 lan_port="$(env_value MLFLOW_LAN_PORT)"
 
-info "Pulling PostgreSQL"
-"${COMPOSE[@]}" pull postgres
-
 info "Building MLflow"
 "${COMPOSE[@]}" build --pull mlflow
 
-info "Starting PostgreSQL"
-"${COMPOSE[@]}" up -d postgres
+info "Checking shared PostgreSQL"
+require_shared_postgres
 
 prepare_artifact_store
-
-for ((i = 1; i <= 30; i++)); do
-  if "${COMPOSE[@]}" exec -T postgres pg_isready \
-      -U "$(env_value POSTGRES_USER)" -d "$(env_value POSTGRES_DB)" >/dev/null 2>&1; then
-    break
-  fi
-  ((i < 30)) || die "PostgreSQL did not become ready."
-  sleep 2
-done
 
 info "Applying MLflow database migrations"
 # shellcheck disable=SC2016
@@ -38,7 +26,6 @@ info "Applying MLflow database migrations"
   bash -lc 'mlflow db upgrade "$MLFLOW_BACKEND_STORE_URI"'
 
 info "Starting MLflow"
-"${COMPOSE[@]}" up -d --remove-orphans postgres
 "${COMPOSE[@]}" up -d --force-recreate --no-deps mlflow
 wait_for_mlflow_container
 

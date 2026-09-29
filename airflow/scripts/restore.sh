@@ -38,13 +38,13 @@ read -r -p "Type RESTORE-AIRFLOW to continue: " answer
 
 info "Stopping Airflow writers"
 "${COMPOSE[@]}" stop airflow-api-server airflow-scheduler airflow-dag-processor airflow-triggerer
-"${COMPOSE[@]}" up -d postgres
+require_shared_postgres
 
 db_user="$(env_value POSTGRES_USER)"
 db_name="$(env_value POSTGRES_DB)"
 
 info "Restoring PostgreSQL"
-"${COMPOSE[@]}" exec -T postgres \
+"${POSTGRES_COMPOSE[@]}" exec -T postgres \
   pg_restore -U "$db_user" -d "$db_name" --clean --if-exists --no-owner \
   < "$BACKUP_DIR/postgres.dump"
 
@@ -56,4 +56,3 @@ info "Starting services"
 "${COMPOSE[@]}" up -d airflow-api-server airflow-scheduler airflow-dag-processor airflow-triggerer
 wait_for_service airflow-api-server
 echo "Restore completed. Run scripts/status.sh and scripts/check-dags.sh."
-

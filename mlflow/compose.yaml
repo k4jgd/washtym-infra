@@ -1,49 +1,6 @@
 name: mlflow
 
 services:
-  postgres:
-    image: postgres:${POSTGRES_VERSION}
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      TZ: ${TZ}
-      PGTZ: ${TZ}
-    secrets:
-      - postgres_password
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - backend
-    command:
-      - postgres
-      - -c
-      - max_connections=50
-      - -c
-      - shared_buffers=256MB
-      - -c
-      - effective_cache_size=768MB
-      - -c
-      - maintenance_work_mem=64MB
-      - -c
-      - work_mem=4MB
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 20s
-    security_opt:
-      - no-new-privileges:true
-    mem_limit: ${POSTGRES_MEMORY_LIMIT}
-    cpus: ${POSTGRES_CPU_LIMIT}
-    logging: &default-logging
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "5"
-
   mlflow:
     build:
       context: .
@@ -53,11 +10,8 @@ services:
         MLFLOW_GID: ${MLFLOW_GID}
     image: local/mlflow-server:${MLFLOW_VERSION}
     restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
     environment:
-      POSTGRES_HOST: postgres
+      POSTGRES_HOST: shared-postgres
       POSTGRES_PORT: "5432"
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -77,6 +31,7 @@ services:
       - ./runtime:/run/mlflow-runtime:ro
     networks:
       - backend
+      - data
     expose:
       - "5000"
     healthcheck:
@@ -98,18 +53,22 @@ services:
       - no-new-privileges:true
     mem_limit: ${MLFLOW_MEMORY_LIMIT}
     cpus: ${MLFLOW_CPU_LIMIT}
-    logging: *default-logging
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
 
 networks:
   backend:
     internal: true
+  data:
+    name: localinfra_data
+    external: true
 
-volumes:
-  postgres_data:
-    name: mlflow_postgres_data
 secrets:
   postgres_password:
-    file: ./secrets/postgres_password
+    file: ../postgres/secrets/mlflow_db_password
   mlflow_flask_secret:
     file: ./secrets/mlflow_flask_secret
   mlflow_admin_password:

@@ -39,13 +39,13 @@ read -r -p "Type RESTORE to continue: " answer
 info "Stopping writers"
 "${COMPOSE[@]}" stop mlflow minio
 artifact_volume="mlflow_minio_data"
-"${COMPOSE[@]}" up -d postgres
+require_shared_postgres
 
 db_user="$(env_value POSTGRES_USER)"
 db_name="$(env_value POSTGRES_DB)"
 
 info "Restoring PostgreSQL"
-"${COMPOSE[@]}" exec -T postgres \
+"${POSTGRES_COMPOSE[@]}" exec -T postgres \
   pg_restore -U "$db_user" -d "$db_name" --clean --if-exists --no-owner \
   < "$BACKUP_DIR/postgres.dump"
 

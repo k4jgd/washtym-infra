@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 SSH_PORT=22
-MLFLOW_PORT=5000
+APPLICATION_PORT=5000
 LAN_CIDR=""
 CONFIGURE_FIREWALL=false
 
@@ -15,7 +15,7 @@ Firewall changes are opt-in to avoid locking out remote administration.
 
   --configure-firewall  Enable UFW for SSH and MLflow
   --lan-cidr CIDR       Office subnet allowed to reach MLflow
-  --mlflow-port PORT    MLflow HTTP port (default: 5000)
+  --application-port PORT  Application HTTP port (default: 5000)
   --ssh-port PORT       SSH port (default: 22)
 EOF
 }
@@ -24,7 +24,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --configure-firewall) CONFIGURE_FIREWALL=true; shift ;;
     --lan-cidr) LAN_CIDR="${2:-}"; shift 2 ;;
-    --mlflow-port) MLFLOW_PORT="${2:-}"; shift 2 ;;
+    --application-port|--mlflow-port) APPLICATION_PORT="${2:-}"; shift 2 ;;
     --ssh-port) SSH_PORT="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage; exit 2 ;;
@@ -36,8 +36,8 @@ if [[ ! "$SSH_PORT" =~ ^[0-9]+$ ]] || ((SSH_PORT < 1 || SSH_PORT > 65535)); then
   echo "Invalid SSH port: $SSH_PORT" >&2
   exit 2
 fi
-if [[ ! "$MLFLOW_PORT" =~ ^[0-9]+$ ]] || ((MLFLOW_PORT < 1 || MLFLOW_PORT > 65535)); then
-  echo "Invalid MLflow port: $MLFLOW_PORT" >&2
+if [[ ! "$APPLICATION_PORT" =~ ^[0-9]+$ ]] || ((APPLICATION_PORT < 1 || APPLICATION_PORT > 65535)); then
+  echo "Invalid application port: $APPLICATION_PORT" >&2
   exit 2
 fi
 if [[ "$CONFIGURE_FIREWALL" == true && ! "$LAN_CIDR" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$ ]]; then
@@ -79,7 +79,7 @@ if [[ "$CONFIGURE_FIREWALL" == true ]]; then
   ufw default deny incoming
   ufw default allow outgoing
   ufw allow "${SSH_PORT}/tcp" comment SSH
-  ufw allow from "$LAN_CIDR" to any port "$MLFLOW_PORT" proto tcp comment MLflow-LAN
+  ufw allow from "$LAN_CIDR" to any port "$APPLICATION_PORT" proto tcp comment LocalInfra-LAN
   ufw --force enable
   ufw status verbose
 else

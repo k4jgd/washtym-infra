@@ -3,12 +3,13 @@
 This folder contains one deployment strategy only:
 
 - MLflow over HTTP on a specific office-LAN IP
-- PostgreSQL for MLflow metadata
+- the independent `../postgres` service for MLflow metadata
 - MinIO for models and all other artifacts
 - Docker Compose on a single Ubuntu server
 
-MinIO and PostgreSQL are private Docker services. Only the configured MLflow
-address is published to the LAN.
+MinIO and the shared PostgreSQL service are private Docker services. Only the
+configured MLflow address is published to the LAN. PostgreSQL gives MLflow its
+own database, login, and password, separate from Airflow.
 
 ## Install
 
@@ -19,9 +20,10 @@ cd ~/washtym-infra/mlflow
 bash main.sh --lan-ip 192.168.0.48 --port 5000
 ```
 
-The first run installs Docker when necessary, generates secrets, builds the
-pinned MLflow and MinIO images, creates the private bucket, migrates the
-database, and starts the services. The MinIO image is built from its pinned
+The first run installs Docker when necessary, starts the shared PostgreSQL
+service, generates secrets, builds the pinned MLflow and MinIO images, creates
+the private bucket, migrates only the MLflow database, and starts the services.
+The MinIO image is built from its pinned
 official source tag because upstream public container images are unavailable.
 
 Open `http://192.168.0.48:5000` from a machine on the office network.
@@ -62,7 +64,7 @@ storage; this server and its disk remain a single point of failure.
 
 ## Storage
 
-- `mlflow_postgres_data`: experiments, runs, users, permissions, and registry metadata
+- `shared_postgres_data`, database `mlflow`: runs, users, permissions, and registry metadata
 - `mlflow_minio_data`: model files, datasets, plots, and other artifacts
 - `backups/`: PostgreSQL dump, MinIO data snapshot, configuration, and secrets
 
@@ -72,16 +74,16 @@ storage; this server and its disk remain a single point of failure.
 bash reset-mlflow.sh
 ```
 
-The script requires the confirmation phrase `DELETE-MLFLOW`. It removes only
-this Compose project's containers, its PostgreSQL and MinIO volumes, its local
-images, `.env`, secrets, and runtime state. Backups are preserved unless
-`--purge-backups` is explicitly supplied.
+The script requires the confirmation phrase `DELETE-MLFLOW`. It removes MLflow
+containers, MinIO artifacts, local images, configuration, and only the `mlflow`
+database. It preserves the shared PostgreSQL service and volume and the Airflow
+database. Backups are preserved unless `--purge-backups` is explicitly supplied.
 
 ## Files
 
 - `main.sh`: complete installation and deployment
 - `reset-mlflow.sh`: confirmed destructive reset
-- `compose.yaml`: PostgreSQL and MLflow
+- `compose.yaml`: MLflow connected to shared PostgreSQL
 - `compose.minio.yaml`: MinIO and S3 artifact configuration
 - `compose.lan.yaml`: LAN-only port publication
 - `scripts/status.sh`: health and artifact-destination check

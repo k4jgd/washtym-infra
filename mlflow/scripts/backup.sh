@@ -23,7 +23,7 @@ restart_services() {
 trap restart_services EXIT
 
 info "Backing up PostgreSQL"
-"${COMPOSE[@]}" exec -T postgres \
+"${POSTGRES_COMPOSE[@]}" exec -T postgres \
   pg_dump -U "$db_user" -d "$db_name" --format=custom \
   > "$destination/postgres.dump"
 

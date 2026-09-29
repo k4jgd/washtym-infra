@@ -2,14 +2,16 @@
 set -Eeuo pipefail
 
 PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+POSTGRES_DIR="$(cd -- "$PROJECT_DIR/../postgres" && pwd)"
 PURGE_BACKUPS=false
 
 usage() {
   cat <<'EOF'
 Usage: bash reset-mlflow.sh [--purge-backups]
 
-Permanently removes this MLflow deployment's containers, persistent database,
-artifacts, generated image, private networks, .env, secrets, and runtime state.
+Permanently removes this MLflow deployment's containers, MinIO artifacts,
+MLflow database, generated images, private networks, .env, secrets, and runtime state.
+The shared PostgreSQL server and Airflow database are preserved.
 Backups are preserved unless --purge-backups is explicitly supplied.
 EOF
 }
@@ -44,10 +46,15 @@ docker info >/dev/null 2>&1 || {
   echo "Docker is not running or this user cannot access it." >&2
   exit 1
 }
+[[ -f "$POSTGRES_DIR/scripts/reset-database.sh" && -f "$POSTGRES_DIR/.env" ]] || {
+  echo "Shared PostgreSQL configuration or reset helper is missing." >&2
+  exit 1
+}
 
 echo "This will permanently delete:"
 echo "  - Docker containers belonging to Compose project 'mlflow'"
-echo "  - volumes mlflow_postgres_data and mlflow_minio_data"
+echo "  - only the MLflow database inside shared PostgreSQL"
+echo "  - volume mlflow_minio_data (and any legacy mlflow_postgres_data volume)"
 echo "  - MLflow-only Docker networks and locally built MLflow/MinIO images"
 echo "  - $PROJECT_DIR/.env"
 echo "  - $PROJECT_DIR/secrets"
@@ -72,6 +79,8 @@ mapfile -t container_ids < <(
 if ((${#container_ids[@]} > 0)); then
   docker rm --force -- "${container_ids[@]}"
 fi
+
+bash "$POSTGRES_DIR/scripts/reset-database.sh" --application mlflow --confirm
 
 for volume in \
   mlflow_postgres_data \
@@ -132,6 +141,7 @@ if [[ "$PURGE_BACKUPS" == true ]]; then
 fi
 
 echo "MLflow reset completed."
+echo "Shared PostgreSQL and the Airflow database were preserved."
 if [[ "$PURGE_BACKUPS" == false ]]; then
   echo "Backups were preserved at: $PROJECT_DIR/backups"
 fi
