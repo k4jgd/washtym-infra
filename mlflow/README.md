@@ -207,6 +207,10 @@ PostgreSQL continues to hold run and registry metadata. Model files, plots, and
 other artifacts are stored in the `mlflow_minio_data` volume under the private
 `mlflow-artifacts` bucket.
 
+The MinIO server image is built locally from the pinned official source tag.
+This avoids relying on the retired public `minio/minio` and `minio/mc` image
+repositories. The first build can take several minutes; later builds are cached.
+
 `setup-minio.sh` refuses to switch an existing local-artifact deployment unless
 `--confirm-switch` is supplied because it does not migrate old artifact files.
 The safer path is to back up, reset, and deploy MinIO from the beginning.

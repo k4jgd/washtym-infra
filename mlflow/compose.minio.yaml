@@ -1,6 +1,11 @@
 services:
   minio:
-    image: minio/minio:${MINIO_VERSION}
+    build:
+      context: .
+      dockerfile: docker/minio/Dockerfile
+      args:
+        MINIO_VERSION: ${MINIO_VERSION}
+    image: local/minio-server:${MINIO_VERSION}
     restart: unless-stopped
     command:
       - server
@@ -38,19 +43,19 @@ services:
         max-file: "5"
 
   minio-init:
-    image: minio/mc:${MINIO_MC_VERSION}
+    image: local/mlflow-server:${MLFLOW_VERSION}
     restart: "no"
     depends_on:
       minio:
         condition: service_healthy
     environment:
       MINIO_BUCKET: ${MINIO_BUCKET}
-    entrypoint: ["/bin/sh", "/opt/localinfra/minio-init.sh"]
+    entrypoint: ["python", "/opt/localinfra/minio-init.py"]
     secrets:
       - minio_access_key
       - minio_secret_key
     volumes:
-      - ./docker/minio-init.sh:/opt/localinfra/minio-init.sh:ro
+      - ./docker/minio-init.py:/opt/localinfra/minio-init.py:ro
     networks:
       - backend
     security_opt:

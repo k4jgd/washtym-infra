@@ -44,5 +44,15 @@ if [[ -f "$PROJECT_DIR/runtime/auth-bootstrap-complete" ]] \
   exit 1
 fi
 
-exec bash "$PROJECT_DIR/main.sh" --artifact-store minio "${main_args[@]}"
+# Keep an existing configuration on the source-built, security-fixed MinIO tag
+# shipped by this repository. Fresh configurations inherit it from .env.example.
+if [[ -f "$PROJECT_DIR/.env" ]]; then
+  pinned_minio_version="$(sed -n 's/^MINIO_VERSION=//p' "$PROJECT_DIR/.env.example" | tail -n 1)"
+  if grep -q '^MINIO_VERSION=' "$PROJECT_DIR/.env"; then
+    sed -i "s|^MINIO_VERSION=.*|MINIO_VERSION=${pinned_minio_version}|" "$PROJECT_DIR/.env"
+  else
+    printf '\nMINIO_VERSION=%s\n' "$pinned_minio_version" >> "$PROJECT_DIR/.env"
+  fi
+fi
 
+exec bash "$PROJECT_DIR/main.sh" --artifact-store minio "${main_args[@]}"

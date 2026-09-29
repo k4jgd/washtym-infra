@@ -49,7 +49,7 @@ echo "This will permanently delete:"
 echo "  - Docker containers belonging to Compose project 'mlflow'"
 echo "  - volumes mlflow_postgres_data, mlflow_artifacts, mlflow_caddy_data, mlflow_caddy_config"
 echo "  - volume mlflow_minio_data"
-echo "  - MLflow-only Docker networks and local/mlflow-server images"
+echo "  - MLflow-only Docker networks and locally built MLflow/MinIO images"
 echo "  - $PROJECT_DIR/.env"
 echo "  - $PROJECT_DIR/secrets"
 echo "  - $PROJECT_DIR/runtime"
@@ -96,7 +96,10 @@ for network in \
 done
 
 mapfile -t image_ids < <(
-  docker image ls --quiet --filter reference='local/mlflow-server:*' | sort -u
+  {
+    docker image ls --quiet --filter reference='local/mlflow-server:*'
+    docker image ls --quiet --filter reference='local/minio-server:*'
+  } | sort -u
 )
 if ((${#image_ids[@]} > 0)); then
   docker image rm --force -- "${image_ids[@]}" >/dev/null

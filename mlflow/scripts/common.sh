@@ -78,8 +78,8 @@ wait_for_mlflow_container() {
 prepare_artifact_store() {
   [[ "$(configured_value ARTIFACT_STORE)" == "minio" ]] || return 0
 
-  info "Pulling pinned MinIO images"
-  "${COMPOSE[@]}" pull minio minio-init
+  info "Building pinned MinIO from the official source tag"
+  "${COMPOSE[@]}" build minio
 
   info "Starting MinIO"
   "${COMPOSE[@]}" up -d minio
