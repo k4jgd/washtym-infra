@@ -127,6 +127,66 @@ Use `bash scripts/status-local.sh` for health checks in this mode. Obtain a
 real DNS name and redeploy with `scripts/deploy.sh` before offering MLflow as a
 directly accessible shared Internet service.
 
+## VPN-only deployment by IP address
+
+To let trusted VPN clients access MLflow directly without an SSH tunnel, bind
+the published port to the IPv4 address assigned to the server's VPN interface:
+
+```bash
+bash main.sh \
+  --mode vpn \
+  --vpn-ip 100.64.0.10 \
+  --port 5000 \
+  --email admin@example.com
+```
+
+Replace the example address with the server's actual VPN address. The preflight
+check refuses to deploy unless that address is currently assigned to a local
+interface. After the first run, `bash main.sh` reuses the saved VPN mode,
+address, and port. VPN-connected clients open `http://100.64.0.10:5000`.
+
+This mode does not publish MLflow on the server's public or LAN addresses.
+PostgreSQL remains on the internal Docker network and is never published. Use
+`bash scripts/status-vpn.sh` for VPN-mode health checks. HTTP is acceptable here
+only when the VPN itself provides trusted, encrypted transport; do not expose
+the configured port through a public cloud firewall or router.
+
+## Office-LAN HTTP deployment by IP address
+
+For a trusted, isolated office network, bind MLflow only to the server's static
+LAN address:
+
+```bash
+bash setup-lan.sh \
+  --lan-ip 192.168.1.50 \
+  --port 5000 \
+  --email admin@example.com
+```
+
+The preflight check requires the IP to be assigned to a server interface. Users
+on the office network open `http://192.168.1.50:5000`. PostgreSQL remains on the
+internal Docker network. Do not forward this port from an Internet router or
+allow it through a public-facing firewall. Basic Auth credentials are not
+encrypted by HTTP, so use this mode only on a trusted network.
+
+Check this deployment with `bash scripts/status-lan.sh`. Later runs can use
+`bash setup-lan.sh` because the LAN mode, address, and port are saved in `.env`.
+
+## Complete reset
+
+To permanently remove the MLflow containers, database, artifacts, generated
+image, MLflow-only networks, configuration, secrets, and runtime state:
+
+```bash
+bash reset-mlflow.sh
+```
+
+The script lists exact targets and requires the typed phrase `DELETE-MLFLOW`.
+Backups are preserved by default. To delete backups too, use
+`bash reset-mlflow.sh --purge-backups`; this requires the longer confirmation
+phrase `DELETE-MLFLOW-INCLUDING-BACKUPS`. The shared `localinfra_edge` network,
+Docker itself, and files belonging to Airflow are never removed.
+
 Configure a client with an individual MLflow account:
 
 ```bash

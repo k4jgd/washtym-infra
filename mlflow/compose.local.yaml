@@ -1,7 +1,7 @@
 services:
   mlflow:
     environment:
-      MLFLOW_SERVER_ALLOWED_HOSTS: localhost,127.0.0.1
+      MLFLOW_SERVER_ALLOWED_HOSTS: localhost:*,127.0.0.1:*
       MLFLOW_SERVER_CORS_ALLOWED_ORIGINS: http://localhost:${MLFLOW_LOCAL_PORT:-5000},http://127.0.0.1:${MLFLOW_LOCAL_PORT:-5000}
     ports:
       - "127.0.0.1:${MLFLOW_LOCAL_PORT:-5000}:5000"

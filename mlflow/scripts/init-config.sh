@@ -61,7 +61,7 @@ generate_secret mlflow_admin_password 24
 chmod +x "$PROJECT_DIR/scripts/"*.sh "$PROJECT_DIR/docker/"*.sh
 
 echo "Configuration initialized."
-echo "Domain: https://${DOMAIN}"
+echo "Configured host: ${DOMAIN}"
 echo "Initial admin username: admin"
 echo "Initial admin password is stored in: secrets/mlflow_admin_password"
-echo "Run scripts/deploy.sh after DNS points to this server."
+echo "Run main.sh to deploy in local, VPN, or HTTPS mode."

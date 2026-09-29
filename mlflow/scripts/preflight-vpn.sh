@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/common.sh"
+
+COMPOSE+=( -f "$PROJECT_DIR/compose.vpn.yaml" )
+
+require_command docker
+require_command ip
+require_command nproc
+require_command awk
+require_initialized
+
+[[ "$(uname -s)" == "Linux" ]] || die "Deployment requires a Linux server."
+docker info >/dev/null 2>&1 || die "Docker Engine is not running or this user cannot access it."
+docker compose version >/dev/null 2>&1 || die "The Docker Compose plugin is unavailable."
+
+vpn_ip="$(env_value MLFLOW_VPN_IP)"
+vpn_port="$(sed -n 's/^MLFLOW_VPN_PORT=//p' "$PROJECT_DIR/.env" | tail -n 1)"
+vpn_port="${vpn_port:-5000}"
+[[ "$vpn_port" =~ ^[0-9]+$ ]] && ((vpn_port >= 1 && vpn_port <= 65535)) \
+  || die "MLFLOW_VPN_PORT must be a valid TCP port."
+
+vpn_interface="$(ip -4 -o addr show | awk -v address="$vpn_ip" '
+  {split($4, parts, "/")} parts[1] == address {print $2; exit}
+')"
+[[ -n "$vpn_interface" ]] \
+  || die "MLFLOW_VPN_IP ${vpn_ip} is not assigned to a local network interface. Connect the VPN first."
+
+cores="$(nproc)"
+memory_kib="$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)"
+memory_gib=$((memory_kib / 1024 / 1024))
+disk_kib="$(df -Pk "$PROJECT_DIR" | awk 'NR == 2 {print $4}')"
+disk_gib=$((disk_kib / 1024 / 1024))
+
+((cores >= 4)) || echo "WARNING: only $cores CPU cores detected; 4 or more are recommended." >&2
+((memory_gib >= 6)) || echo "WARNING: only about ${memory_gib} GiB RAM detected; 8 GiB is recommended for the shared host." >&2
+((disk_gib >= 20)) || echo "WARNING: only about ${disk_gib} GiB free; artifact and backup growth may exhaust it." >&2
+
+if [[ -z "$("${COMPOSE[@]}" ps -q mlflow 2>/dev/null || true)" ]] && command -v ss >/dev/null 2>&1; then
+  if ss -H -ltn | awk -v endpoint="${vpn_ip}:${vpn_port}" '$4 == endpoint {found=1} END {exit !found}'; then
+    die "VPN endpoint ${vpn_ip}:${vpn_port} is already in use."
+  fi
+fi
+
+"${COMPOSE[@]}" config --quiet
+
+echo "VPN preflight checks passed."
+echo "CPU cores: $cores"
+echo "RAM: approximately ${memory_gib} GiB"
+echo "Free disk: approximately ${disk_gib} GiB"
+echo "VPN interface: ${vpn_interface}"
+echo "MLflow bind address: ${vpn_ip}:${vpn_port}"
+
