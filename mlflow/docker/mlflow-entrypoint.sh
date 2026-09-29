@@ -38,6 +38,12 @@ MLFLOW_FLASK_SERVER_SECRET_KEY="$(read_secret mlflow_flask_secret)"
 export MLFLOW_FLASK_SERVER_SECRET_KEY
 export MLFLOW_AUTH_CONFIG_PATH=/tmp/mlflow-auth.ini
 
+if [[ -r /run/secrets/minio_access_key && -r /run/secrets/minio_secret_key ]]; then
+  AWS_ACCESS_KEY_ID="$(read_secret minio_access_key)"
+  AWS_SECRET_ACCESS_KEY="$(read_secret minio_secret_key)"
+  export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+fi
+
 # MLflow requires the bootstrap password only while creating the first admin.
 # deploy.sh writes this marker after the authenticated database is initialized.
 if [[ ! -f /run/mlflow-runtime/auth-bootstrap-complete ]]; then

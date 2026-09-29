@@ -2,8 +2,6 @@
 set -Eeuo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
-COMPOSE+=( -f "$PROJECT_DIR/compose.vpn.yaml" )
-
 require_command docker
 require_command curl
 require_initialized
@@ -26,6 +24,8 @@ info "Building the pinned MLflow image"
 
 info "Starting PostgreSQL"
 "${COMPOSE[@]}" up -d postgres
+
+prepare_artifact_store
 
 for ((i = 1; i <= 30; i++)); do
   if "${COMPOSE[@]}" exec -T postgres pg_isready \
@@ -64,4 +64,3 @@ echo "MLflow is healthy at http://${vpn_ip}:${vpn_port}"
 echo "The port is bound only to the server VPN address."
 echo "Admin username: admin"
 echo "Initial password: $PROJECT_DIR/secrets/mlflow_admin_password"
-

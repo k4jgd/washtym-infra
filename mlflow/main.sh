@@ -8,6 +8,7 @@ EMAIL=""
 VPN_IP=""
 LAN_IP=""
 SERVICE_PORT=""
+ARTIFACT_STORE=""
 SSH_PORT=22
 CONFIGURE_FIREWALL=false
 SKIP_BOOTSTRAP=false
@@ -35,6 +36,7 @@ Options:
   --lan-ip ADDRESS         Server office-LAN interface IPv4 address
   --vpn-ip ADDRESS         Server VPN interface IPv4 address
   --port PORT              LAN/VPN HTTP port (default: 5000)
+  --artifact-store STORE   local or minio (default: saved value or local)
   --email EMAIL            Required on first run
   --configure-firewall     Configure UFW during host bootstrap
   --ssh-port PORT          SSH port permitted by UFW (default: 22)
@@ -52,6 +54,7 @@ while [[ $# -gt 0 ]]; do
     --lan-ip) LAN_IP="${2:-}"; shift 2 ;;
     --vpn-ip) VPN_IP="${2:-}"; shift 2 ;;
     --port) SERVICE_PORT="${2:-}"; shift 2 ;;
+    --artifact-store) ARTIFACT_STORE="${2:-}"; shift 2 ;;
     --email) EMAIL="${2:-}"; shift 2 ;;
     --configure-firewall) CONFIGURE_FIREWALL=true; shift ;;
     --ssh-port) SSH_PORT="${2:-}"; shift 2 ;;
@@ -92,8 +95,14 @@ set_env_value() {
 
 MODE="${MODE:-$(env_value_if_present DEPLOYMENT_MODE)}"
 MODE="${MODE:-local}"
+ARTIFACT_STORE="${ARTIFACT_STORE:-$(env_value_if_present ARTIFACT_STORE)}"
+ARTIFACT_STORE="${ARTIFACT_STORE:-local}"
 [[ "$MODE" == "local" || "$MODE" == "lan" || "$MODE" == "vpn" || "$MODE" == "https" ]] || {
   echo "--mode must be local, lan, vpn, or https" >&2
+  exit 2
+}
+[[ "$ARTIFACT_STORE" == "local" || "$ARTIFACT_STORE" == "minio" ]] || {
+  echo "--artifact-store must be local or minio" >&2
   exit 2
 }
 
@@ -190,6 +199,7 @@ initialize_configuration() {
   echo "==> Initializing configuration for $MODE mode"
   bash "$PROJECT_DIR/scripts/init-config.sh" --domain "$DOMAIN" --email "$EMAIL"
   set_env_value DEPLOYMENT_MODE "$MODE"
+  set_env_value ARTIFACT_STORE "$ARTIFACT_STORE"
   if [[ "$MODE" == "lan" ]]; then
     set_env_value MLFLOW_LAN_IP "$LAN_IP"
     set_env_value MLFLOW_LAN_PORT "$SERVICE_PORT"
@@ -208,8 +218,9 @@ verify_local_binding() {
     --project-directory "$PROJECT_DIR"
     --env-file "$PROJECT_DIR/.env"
     -f "$PROJECT_DIR/compose.yaml"
-    -f "$PROJECT_DIR/compose.local.yaml"
   )
+  [[ "$ARTIFACT_STORE" == "minio" ]] && compose+=( -f "$PROJECT_DIR/compose.minio.yaml" )
+  compose+=( -f "$PROJECT_DIR/compose.local.yaml" )
 
   container_id="$("${compose[@]}" ps -q mlflow)"
   [[ -n "$container_id" ]] || {
@@ -254,8 +265,9 @@ verify_vpn_binding() {
     --project-directory "$PROJECT_DIR"
     --env-file "$PROJECT_DIR/.env"
     -f "$PROJECT_DIR/compose.yaml"
-    -f "$PROJECT_DIR/compose.vpn.yaml"
   )
+  [[ "$ARTIFACT_STORE" == "minio" ]] && compose+=( -f "$PROJECT_DIR/compose.minio.yaml" )
+  compose+=( -f "$PROJECT_DIR/compose.vpn.yaml" )
 
   container_id="$("${compose[@]}" ps -q mlflow)"
   [[ -n "$container_id" ]] || {
@@ -298,8 +310,9 @@ verify_lan_binding() {
     --project-directory "$PROJECT_DIR"
     --env-file "$PROJECT_DIR/.env"
     -f "$PROJECT_DIR/compose.yaml"
-    -f "$PROJECT_DIR/compose.lan.yaml"
   )
+  [[ "$ARTIFACT_STORE" == "minio" ]] && compose+=( -f "$PROJECT_DIR/compose.minio.yaml" )
+  compose+=( -f "$PROJECT_DIR/compose.lan.yaml" )
 
   container_id="$("${compose[@]}" ps -q mlflow)"
   [[ -n "$container_id" ]] || {

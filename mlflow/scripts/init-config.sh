@@ -58,6 +58,8 @@ generate_secret() {
 generate_secret postgres_password 32
 generate_secret mlflow_flask_secret 48
 generate_secret mlflow_admin_password 24
+generate_secret minio_access_key 16
+generate_secret minio_secret_key 32
 chmod +x "$PROJECT_DIR/scripts/"*.sh "$PROJECT_DIR/docker/"*.sh
 
 echo "Configuration initialized."

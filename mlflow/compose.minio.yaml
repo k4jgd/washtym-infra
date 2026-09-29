@@ -1,0 +1,87 @@
+services:
+  minio:
+    image: minio/minio:${MINIO_VERSION}
+    restart: unless-stopped
+    command:
+      - server
+      - /data
+      - --address
+      - :9000
+      - --console-address
+      - :9001
+    environment:
+      MINIO_ROOT_USER_FILE: /run/secrets/minio_access_key
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_secret_key
+    secrets:
+      - minio_access_key
+      - minio_secret_key
+    volumes:
+      - minio_data:/data
+    networks:
+      - backend
+    expose:
+      - "9000"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: ${MINIO_MEMORY_LIMIT}
+    cpus: ${MINIO_CPU_LIMIT}
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  minio-init:
+    image: minio/mc:${MINIO_MC_VERSION}
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_BUCKET: ${MINIO_BUCKET}
+    entrypoint: ["/bin/sh", "/opt/localinfra/minio-init.sh"]
+    secrets:
+      - minio_access_key
+      - minio_secret_key
+    volumes:
+      - ./docker/minio-init.sh:/opt/localinfra/minio-init.sh:ro
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  mlflow:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      MLFLOW_ARTIFACTS_DESTINATION: s3://${MINIO_BUCKET}/artifacts
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_DEFAULT_REGION: us-east-1
+      MLFLOW_ARTIFACT_UPLOAD_DOWNLOAD_TIMEOUT: "600"
+    secrets:
+      - minio_access_key
+      - minio_secret_key
+
+volumes:
+  minio_data:
+    name: mlflow_minio_data
+
+secrets:
+  minio_access_key:
+    file: ./secrets/minio_access_key
+  minio_secret_key:
+    file: ./secrets/minio_secret_key

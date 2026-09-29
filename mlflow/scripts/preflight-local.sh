@@ -2,8 +2,6 @@
 set -Eeuo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
-COMPOSE+=( -f "$PROJECT_DIR/compose.local.yaml" )
-
 require_command docker
 require_command nproc
 require_command awk
@@ -41,4 +39,3 @@ echo "CPU cores: $cores"
 echo "RAM: approximately ${memory_gib} GiB"
 echo "Free disk: approximately ${disk_gib} GiB"
 echo "MLflow bind address: 127.0.0.1:${local_port}"
-

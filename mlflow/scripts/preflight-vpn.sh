@@ -2,8 +2,6 @@
 set -Eeuo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
-COMPOSE+=( -f "$PROJECT_DIR/compose.vpn.yaml" )
-
 require_command docker
 require_command ip
 require_command nproc
@@ -50,4 +48,3 @@ echo "RAM: approximately ${memory_gib} GiB"
 echo "Free disk: approximately ${disk_gib} GiB"
 echo "VPN interface: ${vpn_interface}"
 echo "MLflow bind address: ${vpn_ip}:${vpn_port}"
-

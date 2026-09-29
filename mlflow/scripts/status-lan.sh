@@ -2,8 +2,6 @@
 set -Eeuo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
-COMPOSE+=( -f "$PROJECT_DIR/compose.lan.yaml" )
-
 require_command docker
 require_command curl
 require_initialized
@@ -25,4 +23,3 @@ else
 fi
 
 "${COMPOSE[@]}" exec -T mlflow mlflow --version
-

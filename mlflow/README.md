@@ -187,10 +187,36 @@ Backups are preserved by default. To delete backups too, use
 phrase `DELETE-MLFLOW-INCLUDING-BACKUPS`. The shared `localinfra_edge` network,
 Docker itself, and files belonging to Airflow are never removed.
 
+## MinIO artifact storage
+
+To store model files and all other MLflow artifacts in a private MinIO bucket,
+start from a reset deployment and run:
+
+```bash
+bash setup-minio.sh \
+  --mode lan \
+  --lan-ip 192.168.1.50 \
+  --port 5000 \
+  --email admin@example.com
+```
+
+MinIO is reachable only by containers on the internal backend network; neither
+its S3 API nor console is published on the host. MLflow proxies uploads and
+downloads, so client machines need only the MLflow URL and MLflow credentials.
+PostgreSQL continues to hold run and registry metadata. Model files, plots, and
+other artifacts are stored in the `mlflow_minio_data` volume under the private
+`mlflow-artifacts` bucket.
+
+`setup-minio.sh` refuses to switch an existing local-artifact deployment unless
+`--confirm-switch` is supplied because it does not migrate old artifact files.
+The safer path is to back up, reset, and deploy MinIO from the beginning.
+`scripts/backup.sh` automatically detects MinIO, briefly stops artifact writers,
+and includes a consistent copy of the MinIO data volume.
+
 Configure a client with an individual MLflow account:
 
 ```bash
-export MLFLOW_TRACKING_URI=https://mlflow.example.com
+export MLFLOW_TRACKING_URI=http://192.168.1.50:5000
 export MLFLOW_TRACKING_USERNAME=your-user
 export MLFLOW_TRACKING_PASSWORD='your-password'
 ```
@@ -268,6 +294,7 @@ Docker manages the persistent volumes:
 
 - `mlflow_postgres_data`
 - `mlflow_artifacts`
+- `mlflow_minio_data` when MinIO artifact storage is enabled
 - `mlflow_caddy_data`
 - `mlflow_caddy_config`
 

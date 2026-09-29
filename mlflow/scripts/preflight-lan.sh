@@ -2,8 +2,6 @@
 set -Eeuo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
-COMPOSE+=( -f "$PROJECT_DIR/compose.lan.yaml" )
-
 require_command docker
 require_command ip
 require_command nproc
@@ -50,4 +48,3 @@ echo "RAM: approximately ${memory_gib} GiB"
 echo "Free disk: approximately ${disk_gib} GiB"
 echo "LAN interface: ${lan_interface}"
 echo "MLflow bind address: ${lan_ip}:${lan_port}"
-

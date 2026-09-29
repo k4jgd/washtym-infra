@@ -30,6 +30,8 @@ info "Building the pinned MLflow image"
 info "Starting PostgreSQL"
 "${COMPOSE[@]}" up -d postgres
 
+prepare_artifact_store
+
 for ((i = 1; i <= 30; i++)); do
   if "${COMPOSE[@]}" exec -T postgres pg_isready \
       -U "$(env_value POSTGRES_USER)" -d "$(env_value POSTGRES_DB)" >/dev/null 2>&1; then

@@ -48,6 +48,7 @@ docker info >/dev/null 2>&1 || {
 echo "This will permanently delete:"
 echo "  - Docker containers belonging to Compose project 'mlflow'"
 echo "  - volumes mlflow_postgres_data, mlflow_artifacts, mlflow_caddy_data, mlflow_caddy_config"
+echo "  - volume mlflow_minio_data"
 echo "  - MLflow-only Docker networks and local/mlflow-server images"
 echo "  - $PROJECT_DIR/.env"
 echo "  - $PROJECT_DIR/secrets"
@@ -76,6 +77,7 @@ fi
 for volume in \
   mlflow_postgres_data \
   mlflow_artifacts \
+  mlflow_minio_data \
   mlflow_caddy_data \
   mlflow_caddy_config; do
   docker volume inspect "$volume" >/dev/null 2>&1 \
@@ -108,6 +110,7 @@ fi
 for volume in \
   mlflow_postgres_data \
   mlflow_artifacts \
+  mlflow_minio_data \
   mlflow_caddy_data \
   mlflow_caddy_config; do
   if docker volume inspect "$volume" >/dev/null 2>&1; then

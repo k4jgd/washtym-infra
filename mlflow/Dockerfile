@@ -11,6 +11,7 @@ USER root
 # by PostgreSQL and built-in authentication, pinned for repeatable builds.
 RUN python -m pip install --no-cache-dir \
       "mlflow[auth]==${MLFLOW_VERSION}" \
+      "boto3==1.43.97" \
       "psycopg2-binary==2.9.10" \
     && groupadd --gid "${MLFLOW_GID}" mlflow-runtime \
     && useradd --uid "${MLFLOW_UID}" --gid "${MLFLOW_GID}" \
@@ -25,4 +26,3 @@ USER mlflow-runtime:mlflow-runtime
 ENV HOME=/tmp
 ENTRYPOINT ["/usr/local/bin/mlflow-entrypoint"]
 CMD ["mlflow", "server", "--app-name", "basic-auth", "--serve-artifacts"]
-

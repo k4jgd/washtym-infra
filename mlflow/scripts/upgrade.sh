@@ -35,7 +35,7 @@ info "Applying database migrations"
   bash -lc 'mlflow db upgrade "$MLFLOW_BACKEND_STORE_URI"'
 
 info "Starting upgraded services"
-"${COMPOSE[@]}" up -d --remove-orphans
+start_configured_stack
 wait_for_mlflow_container
 echo "Upgrade from $old_version to $NEW_VERSION completed."
 echo "Database migrations are not automatically reversible; retain the pre-upgrade backup."

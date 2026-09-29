@@ -32,12 +32,18 @@ if [[ -f "$BACKUP_DIR/SHA256SUMS" ]]; then
   (cd "$BACKUP_DIR" && sha256sum --check SHA256SUMS)
 fi
 
-echo "This operation will replace the live MLflow database and artifact volume."
+echo "This operation will replace the live MLflow database and artifact storage."
 read -r -p "Type RESTORE to continue: " answer
 [[ "$answer" == "RESTORE" ]] || die "Restore cancelled."
 
 info "Stopping writers"
-"${COMPOSE[@]}" stop caddy mlflow
+if [[ "$(configured_value ARTIFACT_STORE)" == "minio" ]]; then
+  "${COMPOSE[@]}" stop caddy mlflow minio
+  artifact_volume="mlflow_minio_data"
+else
+  "${COMPOSE[@]}" stop caddy mlflow
+  artifact_volume="mlflow_artifacts"
+fi
 "${COMPOSE[@]}" up -d postgres
 
 db_user="$(env_value POSTGRES_USER)"
@@ -50,14 +56,14 @@ info "Restoring PostgreSQL"
 
 info "Replacing the artifact volume"
 docker run --rm \
-  --mount type=volume,src=mlflow_artifacts,dst=/target \
+  --mount type=volume,src="$artifact_volume",dst=/target \
   alpine:3.22 sh -c 'find /target -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +'
 docker run --rm \
-  --mount type=volume,src=mlflow_artifacts,dst=/target \
+  --mount type=volume,src="$artifact_volume",dst=/target \
   --mount type=bind,src="$BACKUP_DIR",dst=/backup,readonly \
   alpine:3.22 tar -C /target -xzf /backup/artifacts.tar.gz
 
 info "Starting services"
-"${COMPOSE[@]}" up -d
+start_configured_stack
 wait_for_mlflow_container
-echo "Restore completed. Run scripts/status.sh to verify external access."
+echo "Restore completed. Run the status script for the configured deployment mode."
