@@ -180,8 +180,8 @@ verify_local_binding() {
 
 cd "$PROJECT_DIR"
 bootstrap_if_needed
-resume_with_docker_group_if_needed
 initialize_configuration
+resume_with_docker_group_if_needed
 
 if [[ "$MODE" == "local" ]]; then
   if ! bash "$PROJECT_DIR/scripts/deploy-local.sh"; then
